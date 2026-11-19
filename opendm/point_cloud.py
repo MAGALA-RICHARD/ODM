@@ -279,8 +279,11 @@ def post_point_cloud_steps(args, tree, rerun=False):
     # Classify and rectify before generating derivate files
     if args.pc_classify:
         pc_classify_marker = os.path.join(tree.odm_georeferencing, 'pc_classify_done.txt')
-
-        if not io.file_exists(pc_classify_marker) or rerun:
+        complete = io.file_exists(pc_classify_marker) and not rerun
+        if complete and args.dtm and not commands.pdal.has_ground_points(tree.odm_georeferencing_model_laz):
+            log.ODM_WARNING('Classification marker has no ground points; recomputing ground classification')
+            complete = False
+        if not complete:
             log.ODM_INFO("Classifying {} using Simple Morphological Filter (1/2)".format(tree.odm_georeferencing_model_laz))
             commands.classify(tree.odm_georeferencing_model_laz,
                                 args.smrf_scalar, 
@@ -291,6 +294,8 @@ def post_point_cloud_steps(args, tree, rerun=False):
 
             log.ODM_INFO("Classifying {} using OpenPointClass (2/2)".format(tree.odm_georeferencing_model_laz))
             classify(tree.odm_georeferencing_model_laz, args.max_concurrency)
+            if args.dtm:
+                commands.pdal.require_ground_points(tree.odm_georeferencing_model_laz)
 
             with open(pc_classify_marker, 'w') as f:
                 f.write('Classify: smrf\n')
