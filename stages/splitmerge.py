@@ -350,7 +350,7 @@ class ODMMergeStage(types.ODM_Stage):
                 log.ODM_WARNING("Found merged cameras.json in %s" % tree.root_path)
 
             # Stop the pipeline short by skipping to the postprocess stage.
-            # Afterwards, we're done.
+            # Afterward, we're done.
             self.next_stage = self.last_stage()
         else:
             log.ODM_INFO("Normal dataset, nothing to merge.")

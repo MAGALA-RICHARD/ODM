@@ -24,6 +24,7 @@ from opendm.boundary import as_polygon, export_to_bounds_files
 from opendm.align import compute_alignment_matrix, transform_point_cloud, transform_obj
 from opendm.utils import np_to_json
 
+
 class ODMGeoreferencingStage(types.ODM_Stage):
     def process(self, args, outputs):
         tree = outputs['tree']
@@ -107,7 +108,7 @@ class ODMGeoreferencingStage(types.ODM_Stage):
 
                 with open(gcp_geojson_export_file, 'w') as f:
                     f.write(json.dumps(geojson, indent=4))
-                
+
                 with zipfile.ZipFile(gcp_geojson_zip_export_file, 'w', compression=zipfile.ZIP_LZMA) as f:
                     f.write(gcp_geojson_export_file, arcname=os.path.basename(gcp_geojson_export_file))
 
@@ -130,43 +131,48 @@ class ODMGeoreferencingStage(types.ODM_Stage):
                 # Establish appropriate las scale for export
                 las_scale = 0.001
                 filtered_point_cloud_stats = tree.path("odm_filterpoints", "point_cloud_stats.json")
+
                 # Function that rounds to the nearest 10
                 # and then chooses the one below so our
                 # las scale is sensible
                 def powerr(r):
-                    return pow(10,round(math.log10(r))) / 10
+                    return pow(10, round(math.log10(r))) / 10
 
                 if os.path.isfile(filtered_point_cloud_stats):
                     try:
                         with open(filtered_point_cloud_stats, 'r') as stats:
-                             las_stats = json.load(stats)
-                             spacing = powerr(las_stats['spacing'])
-                             log.ODM_INFO("las scale calculated as the minimum of 1/10 estimated spacing or %s, which ever is less." % las_scale)
-                             las_scale = min(spacing, 0.001)
+                            las_stats = json.load(stats)
+                            spacing = powerr(las_stats['spacing'])
+                            log.ODM_INFO(
+                                "las scale calculated as the minimum of 1/10 estimated spacing or %s, which ever is less." % las_scale)
+                            las_scale = min(spacing, 0.001)
                     except Exception as e:
-                        log.ODM_WARNING("Cannot find file point_cloud_stats.json. Using default las scale: %s" % las_scale)
+                        log.ODM_WARNING(
+                            "Cannot find file point_cloud_stats.json. Using default las scale: %s" % las_scale)
                 else:
                     log.ODM_INFO("No point_cloud_stats.json found. Using default las scale: %s" % las_scale)
 
                 params += [
                     f'--filters.transformation.matrix="1 0 0 {utmoffset[0]} 0 1 0 {utmoffset[1]} 0 0 1 0 0 0 0 1"',
-                    f'--writers.las.offset_x={reconstruction.georef.utm_east_offset}' ,
+                    f'--writers.las.offset_x={reconstruction.georef.utm_east_offset}',
                     f'--writers.las.offset_y={reconstruction.georef.utm_north_offset}',
                     f'--writers.las.scale_x={las_scale}',
                     f'--writers.las.scale_y={las_scale}',
                     f'--writers.las.scale_z={las_scale}',
                     '--writers.las.offset_z=0',
-                    f'--writers.las.a_srs="{reconstruction.georef.proj4()}"' # HOBU this should maybe be WKT
+                    f'--writers.las.a_srs="{reconstruction.georef.proj4()}"'  # HOBU this should maybe be WKT
                 ]
 
                 if reconstruction.has_gcp() and io.file_exists(gcp_geojson_zip_export_file):
                     if os.path.getsize(gcp_geojson_zip_export_file) <= 65535:
                         log.ODM_INFO("Embedding GCP info in point cloud")
                         params += [
-                            '--writers.las.vlrs="{\\\"filename\\\": \\\"%s\\\", \\\"user_id\\\": \\\"ODM\\\", \\\"record_id\\\": 2, \\\"description\\\": \\\"Ground Control Points (zip)\\\"}"' % gcp_geojson_zip_export_file.replace(os.sep, "/")
+                            '--writers.las.vlrs="{\\\"filename\\\": \\\"%s\\\", \\\"user_id\\\": \\\"ODM\\\", \\\"record_id\\\": 2, \\\"description\\\": \\\"Ground Control Points (zip)\\\"}"' % gcp_geojson_zip_export_file.replace(
+                                os.sep, "/")
                         ]
                     else:
-                        log.ODM_WARNING("Cannot embed GCP info in point cloud, %s is too large" % gcp_geojson_zip_export_file)
+                        log.ODM_WARNING(
+                            "Cannot embed GCP info in point cloud, %s is too large" % gcp_geojson_zip_export_file)
 
                 system.run(cmd + ' ' + ' '.join(stages) + ' ' + ' '.join(params))
 
@@ -188,7 +194,7 @@ class ODMGeoreferencingStage(types.ODM_Stage):
 
                     try:
                         cropper.create_bounds_gpkg(tree.odm_georeferencing_model_laz, args.crop,
-                                                    decimation_step=decimation_step)
+                                                   decimation_step=decimation_step)
                     except:
                         log.ODM_WARNING("Cannot calculate crop bounds! We will skip cropping")
                         args.crop = 0
@@ -204,7 +210,6 @@ class ODMGeoreferencingStage(types.ODM_Stage):
                 log.ODM_INFO("Converting point cloud (non-georeferenced)")
                 system.run(cmd + ' ' + ' '.join(stages) + ' ' + ' '.join(params))
 
-
             stats_dir = tree.path("opensfm", "stats", "codem")
             if os.path.exists(stats_dir) and self.rerun():
                 shutil.rmtree(stats_dir)
@@ -218,7 +223,8 @@ class ODMGeoreferencingStage(types.ODM_Stage):
 
                     a_matrix = None
                     try:
-                        a_matrix = compute_alignment_matrix(tree.odm_georeferencing_model_laz, tree.odm_align_file, stats_dir)
+                        a_matrix = compute_alignment_matrix(tree.odm_georeferencing_model_laz, tree.odm_align_file,
+                                                            stats_dir)
                     except Exception as e:
                         log.ODM_WARNING("Cannot compute alignment matrix: %s" % str(e))
 
@@ -245,7 +251,9 @@ class ODMGeoreferencingStage(types.ODM_Stage):
                                     os.rename(unaligned_obj, obj)
                                 os.rename(obj, unaligned_obj)
                                 try:
-                                    transform_obj(unaligned_obj, a_matrix, [reconstruction.georef.utm_east_offset, reconstruction.georef.utm_north_offset], obj)
+                                    transform_obj(unaligned_obj, a_matrix, [reconstruction.georef.utm_east_offset,
+                                                                            reconstruction.georef.utm_north_offset],
+                                                  obj)
                                     log.ODM_INFO("Transformed %s" % obj)
                                 except Exception as e:
                                     log.ODM_WARNING("Cannot transform textured model: %s" % str(e))
@@ -275,10 +283,9 @@ class ODMGeoreferencingStage(types.ODM_Stage):
         else:
             log.ODM_WARNING('Found a valid georeferenced model in: %s'
                             % tree.odm_georeferencing_model_laz)
-            # A previous run may have saved geometry but failed classification.
-            point_cloud.post_point_cloud_steps(args, tree, self.rerun())
 
-        if args.optimize_disk_space and io.file_exists(tree.odm_georeferencing_model_laz) and io.file_exists(tree.filtered_point_cloud):
+        if args.optimize_disk_space and io.file_exists(tree.odm_georeferencing_model_laz) and io.file_exists(
+                tree.filtered_point_cloud):
             os.remove(tree.filtered_point_cloud)
 
 
