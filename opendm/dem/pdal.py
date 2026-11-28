@@ -34,7 +34,6 @@ import os
 import sys
 import json as jsonlib
 import tempfile
-import subprocess
 from opendm import system
 from opendm import log
 from opendm.utils import double_quote
@@ -149,43 +148,27 @@ def run_pipeline(json):
         'pipeline',
         '-i %s' % double_quote(jsonfile)
     ]
-    try:
-        system.run(' '.join(cmd))
-    finally:
-        os.remove(jsonfile)
+    system.run(' '.join(cmd))
+    os.remove(jsonfile)
 
 
 def run_pdaltranslate_smrf(fin, fout, scalar, slope, threshold, window):
-    """Pass filenames as JSON data, including Windows paths containing spaces."""
-    run_pipeline({'pipeline': [
-        {'type': 'readers.las', 'filename': os.fspath(fin)},
-        {'type': 'filters.smrf', 'scalar': scalar, 'slope': slope,
-         'threshold': threshold, 'window': window},
-        {'type': 'writers.las', 'filename': os.fspath(fout), 'forward': 'scale,offset'}
-    ]})
+    """ Run PDAL translate  """
+    cmd = [
+        'pdal',
+        'translate',
+        '-i %s' % fin,
+        '-o %s' % fout,
+        'smrf',
+        '--overwrite',
+        '--filters.smrf.scalar=%s' % scalar,
+        '--filters.smrf.slope=%s' % slope,
+        '--filters.smrf.threshold=%s' % threshold,
+        '--filters.smrf.window=%s' % window,
+        '--writers.las.forward=scale,offset'
+    ]
 
-
-def has_ground_points(filename):
-    """Inspect class values in a streaming PDAL statistics pass, before renderdem.
-
-    An empty class-2 selection must never reach the native DEM renderer, which
-    can derive invalid bounds and allocate excessive memory for that input.
-    """
-    result = subprocess.run(
-        ['pdal', 'info', '--stats', '--dimensions', 'Classification',
-         '--enumerate', 'Classification', os.fspath(filename)],
-        check=True, capture_output=True, text=True, timeout=600,
-        **({'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}))
-    stats = jsonlib.loads(result.stdout).get('stats', {}).get('statistic', [])
-    return any(stat.get('name') == 'Classification' and stat.get('count', 0) > 0
-               and 2 in stat.get('values', []) for stat in stats)
-
-
-def require_ground_points(filename):
-    if not has_ground_points(filename):
-        raise system.ExitException(
-            'Cannot create DTM: no ground-class points (LAS class 2) in %s. '
-            'Ground classification must succeed before terrain generation.' % filename)
+    system.run(' '.join(cmd))
 
 
 def merge_point_clouds(input_files, output_file):

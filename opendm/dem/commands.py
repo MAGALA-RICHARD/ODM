@@ -5,7 +5,6 @@ import math
 import shutil
 import glob
 import re
-import tempfile
 from opendm.system import run
 from opendm import point_cloud
 from opendm import io
@@ -37,18 +36,11 @@ except ModuleNotFoundError:
 
 def classify(lasFile, scalar, slope, threshold, window):
     start = datetime.now()
-    handle, temporary = tempfile.mkstemp(prefix='smrf-', suffix='.laz',
-                                         dir=os.path.dirname(os.path.abspath(lasFile)))
-    os.close(handle)
+
     try:
-        pdal.run_pdaltranslate_smrf(lasFile, temporary, scalar, slope, threshold, window)
-        pdal.require_ground_points(temporary)
-        os.replace(temporary, lasFile)
-    except Exception as error:
-        raise system.ExitException('Ground classification failed for %s: %s' % (lasFile, error)) from error
-    finally:
-        if os.path.exists(temporary):
-            os.remove(temporary)
+        pdal.run_pdaltranslate_smrf(lasFile, lasFile, scalar, slope, threshold, window)
+    except:
+        log.ODM_WARNING("Error creating classified file %s" % lasFile)
 
     log.ODM_INFO('Created %s in %s' % (lasFile, datetime.now() - start))
     return lasFile
@@ -80,8 +72,6 @@ def create_dem(input_point_cloud, dem_type, output_type='max', radiuses=['0.56']
     """ Create DEM from multiple radii, and optionally gapfill """
     
     start = datetime.now()
-    if dem_type == 'dtm':
-        pdal.require_ground_points(input_point_cloud)
     kwargs = {
         'input': input_point_cloud,
         'outdir': outdir,
